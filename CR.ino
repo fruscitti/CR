@@ -1,148 +1,306 @@
 
 /*
- * IZQ: Echo violeta
- * IZQ: Trig gris
- * Der: Echo
- * Der: Trig
+ * Dispatch
  */
 
-const byte PB = 41;
-const byte PG = 40;
-const byte PR = 42;
-const byte RI = 45;
-const byte BI = 44;
-const byte RD = 43;
-const byte GD = 38;
-const byte TD = 33;
-const byte ED = 32;
-const byte TI = 31;
-const byte EI = 30;
-const byte SPK = 47;
+typedef enum B_STATES { ST_WAIT, ST_PLAY, ST_WIN, ST_LOSS } b_state;
+#define RED 0
+#define GREEN 1
+#define BLUE 2
+#define WRONG 3
 
-int read_distance(byte trigPin, byte echoPin) {
-  digitalWrite(trigPin, LOW);
-  delayMicroseconds(2);
-  // Sets the trigPin on HIGH state for 10 micro seconds
-  digitalWrite(trigPin, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(trigPin, LOW);  // Reads the echoPin, returns the sound wave travel time in microseconds
-  long duration = pulseIn(echoPin, HIGH);
-  return (int)(duration>>9);
-  // Calculating the distance
-  //return duration*0.034/2;
+
+byte puzzle[] = { GREEN, BLUE, RED }; //, RED, GREEN, BLUE };
+#define puzzle_size (sizeof(puzzle)/sizeof(puzzle[0]))
+
+typedef struct STATE_INFO state_info;
+
+typedef void (*state_handler)  (state_info *);
+typedef bool (*state_pre_check)(state_info *);
+typedef void (*state_init)     (state_info *);
+
+typedef struct DISPATCH_INFO {
+  b_state state;
+  state_init    init;
+  state_handler handler;
+  state_init    quit;
+  state_pre_check * pre_checks;
+} dispatch_info;
+
+struct STATE_INFO {
+  b_state prev_state;
+  b_state curr_state;
+
+  long millis;      // Comienzo del estado
+
+  /* wait */
+  int tic;
+
+  /* play */
+  byte step;
+};
+
+void transition_to(b_state, state_info * info);
+
+/* Externs */
+extern void play_sound(byte color, int ms);
+
+/* Precondiciones a chequear */
+bool check_active (state_info * info) {
 }
 
-void dl_red() {
-  digitalWrite(RI, LOW);
-  digitalWrite(BI, HIGH);
+/*
+ * Wait state
+ */
+void st_wait_init(state_info * info) {
+  info->tic = 0;
 }
 
-void dl_blue() {
-  digitalWrite(RI, HIGH);
-  digitalWrite(BI, LOW);
-}
-
-void dl_off() {
-  digitalWrite(RI, HIGH);
-  digitalWrite(BI, HIGH);
-}
-
-void dr_red() {
-  digitalWrite(RD, LOW);
-  digitalWrite(GD, HIGH);
-}
-
-void dr_green() {
-  digitalWrite(RD, HIGH);
-  digitalWrite(GD, LOW);
-}
-
-void dr_off() {
-  digitalWrite(RD, HIGH);
-  digitalWrite(GD, HIGH);
-}
-
-bool check_combination(int imin, int imax, int dmin, int dmax, int n_times, int m_times) {
-  int t = 0;
-  int tok = 0;
-
-  while (t++ < m_times) {
-    long li = read_distance(TI, EI);
-    long ld = read_distance(TD, ED);
-
-    if (li >= imin && li <= imax && ld >= dmin && ld <= dmax) {
-      tok++;
-      if (tok >= n_times)
-        return true;
-    } else {
-      tok = 0;
+void st_wait_handle(state_info * info){
+  //Serial.println("wait handler");
+  caleido(info->tic);
+  info->tic++;
+  for(int ii=0; ii<20; ii++) {
+    if (check_activity()) {
+      transition_to(ST_PLAY, info);
+      return;
     }
-    /* Actualizo color aca?? */
-    if (li >= imin && li <= imax && ld >= dmin && ld <= dmax) {
-      dl_red();
-      dr_red();
-    } else if (li >= imin && li <= imax) {
-      dl_blue();
-      dr_off();
-    } else if (ld >= dmin && ld <= dmax) {
-      dl_off();
-      dr_green();
-    } else {
-      dl_off();
-      dr_off();
-    }
-
     delay(50);
   }
-  return false;
 }
 
-long buckets[]            = { 9999999l, 40,30,20,10 };
-#define STEPS (sizeof(buckets)/sizeof(buckets[0]))
-byte read_distance_level(byte trigPin, byte echoPin) {
-  long d = read_distance(trigPin, echoPin);
-  // Serial.println(d);
-  int l;
-  for (l=STEPS-1; l >= 0; l--) {
-    if (buckets[l] > d) break;
+void st_wait_quit(state_info * info) {
+}
+
+void leds_off() {
+  dl_off();
+  dr_off();
+  p_off();
+}
+
+const int sh = 300;
+void play_h(byte color, bool ok) {
+  player_led(color);
+  play_sound(ok?color:WRONG, sh);
+  //delay(sh);
+  dl_off();
+  dr_off();
+}
+
+const int sd = 400;
+void play_p(byte color) {
+  switch(color) {
+    case RED:
+      p_red();
+      break;
+    case GREEN:
+      p_green();
+      break;
+    case BLUE:
+      p_blue();
+      break;
+    case WRONG:
+      p_off();
+      break; 
   }
-  return l; 
+  play_sound(color, sd);
+  p_off();
 }
 
+
+const int dph = 500;
+void play_ph(byte color_h, byte color_p, bool ok) {
+  player_led(color_h);
+  switch(color_p) {
+    case RED:
+      p_red();
+      break;
+    case GREEN:
+      p_green();
+      break;
+    case BLUE:
+      p_blue();
+      break;
+    case WRONG:
+      p_off();
+      break; 
+  }
+  play_sound(ok?color_h:WRONG, dph);
+  dl_off();
+  dr_off();
+  p_off();
+}
+
+
+/*
+ * Play state
+ */
+
+ 
+const int d1 = 300;
+void st_play_init(state_info * info) {
+  info->step = 0;
+  leds_off();
+/*  
+  p_red();
+  play_sound(RED, d1);
+  delay(d1);
+  p_green();
+  play_sound(GREEN, d1);
+  delay(d1);
+  p_blue();
+  play_sound(BLUE, d1);
+  delay(d1);
+*/  
+}
+
+void st_play_handle(state_info * info){
+  /*
+   * Muestro en pirana el color que va y el sound
+   * Leo el control
+   * si está Ok avanzo un step
+   * Si no, wrong y salgo.
+   */
+  play_p(puzzle[info->step]);
+
+  byte c = read_color(puzzle[info->step]);
+
+  if (c == puzzle[info->step]) {
+    play_ph(c, c, true);
+    if(++(info->step) == puzzle_size) {
+      transition_to(ST_WIN, info);
+      return;
+    }
+    delay(400);
+  } else {
+    play_ph(c, puzzle[info->step], false);
+    info->step = 0;
+    transition_to(ST_WAIT, info);
+    return;
+  }
+}
+
+void st_play_handle2(state_info * info){
+  /*
+   * Muestro en pirana el color que va y el sound
+   * Leo el control
+   * si está Ok avanzo un step
+   * Si no, wrong y salgo.
+   */
+  for(int ii=0; ii<=info->step; ii++) {
+    play_p(puzzle[ii]);
+    delay(300);
+  }
+
+  for(int ii=0; ii<=info->step; ii++) {
+    byte c = read_color(ii);
+  
+    if (c == puzzle[ii]) {
+      play_ph(c, c, true);
+      delay(400);
+    } else {
+      play_ph(c, puzzle[info->step], false);
+      info->step = 0;
+      transition_to(ST_WAIT, info);
+      delay(1000);
+      return;
+    }
+  }
+
+  if(++(info->step) == puzzle_size) {
+    transition_to(ST_WIN, info);
+    return;
+  }
+}
+
+void st_play_quit(state_info * info) {
+}
+
+void st_win_init(state_info * info) {
+}
+
+void st_win_handle(state_info * info){
+  p_green();
+  delay(200);
+  p_off();
+  delay(200);
+  if (read_color(RED) == RED) {
+    transition_to(ST_PLAY, info);
+    return;
+  }
+}
+
+void st_win_quit(state_info * info) {
+}
+
+
+
+dispatch_info dispatch_info_table[] = {
+  { ST_WAIT, st_wait_init, st_wait_handle, st_wait_quit, (state_pre_check[]){NULL} },
+  { ST_PLAY, st_play_init, st_play_handle2, st_play_quit, (state_pre_check[]){NULL} },
+  { ST_WIN, st_win_init, st_win_handle, st_win_quit, (state_pre_check[]){NULL} }
+};
+
+
+void transition_to(b_state state, state_info * info) {
+  if (dispatch_info_table[info->curr_state].quit)
+    dispatch_info_table[info->curr_state].quit(info);
+
+  info->prev_state = info->curr_state;
+  info->curr_state = state;
+  info->millis = millis();
+
+  if (dispatch_info_table[info->curr_state].init)
+    dispatch_info_table[info->curr_state].init(info);
+}
+
+state_info info;
+
+void reset() {
+  game_reset();
+  info.curr_state = ST_WAIT;
+  transition_to(ST_WAIT, &info);
+}
+
+extern const byte PB;
+extern const byte PG;
+extern const byte PR;
 
 void setup() {
   Serial.begin(9600);
-  pinMode(PB, OUTPUT);
-  pinMode(PG, OUTPUT);
-  pinMode(PR, OUTPUT);
-  pinMode(RI, OUTPUT);
-  pinMode(BI, OUTPUT);
-  pinMode(RD, OUTPUT);
-  pinMode(GD, OUTPUT);
-  pinMode(SPK, OUTPUT);
-  pinMode(TD, OUTPUT);
-  pinMode(TI, OUTPUT);
-  pinMode(ED, INPUT);
-  pinMode(EI, INPUT);
-  digitalWrite(PB, HIGH);
-  digitalWrite(PG, HIGH);
-  digitalWrite(PR, HIGH);
-  digitalWrite(RI, HIGH);
-  digitalWrite(BI, HIGH);
-  digitalWrite(RD, HIGH);
-  digitalWrite(GD, HIGH);
-  digitalWrite(SPK, LOW);
-  
+  Serial.println("Begin");
+  game_setup();
+  reset();
+  pinMode(47, OUTPUT);
+}
+
+void loop2() {
+  Serial.println("Read Beg");
+  byte c = read_color(RED);
+  Serial.print("Color: ");
+  Serial.println(c);
+  delay(1000);
+  /*
+  tone(47, 440, 400);
+  delay(1000);
+  tone(47, 494, 400);
+  delay(1000);
+  tone(47, 554, 400);
+  delay(1000);
+  tone(47, 300, 400);
+  delay(1000);
+  tone(47, 200, 400);
+  delay(1000);
+  tone(47, 100, 400);
+  delay(1000);
+  */  
 }
 
 void loop() {
-  bool r = check_combination(2, 4, 2, 4, 10, 20);
-  //Serial.println(r ? "OK" : "NO");
-  if (r) {
-    //tone(SPK, 1500);    
-  } else {
-    //tone(SPK, 500);
-  }
-
-  //delay(500);
+  for(int ii=0; dispatch_info_table[info.curr_state].pre_checks[ii]; ii++)
+    if (dispatch_info_table[info.curr_state].pre_checks[ii](&info))
+      return; //transision
+  dispatch_info_table[info.curr_state].handler(&info);
 }
+
+
