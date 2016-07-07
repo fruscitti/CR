@@ -297,6 +297,10 @@ void loop2() {
 }
 
 void loop() {
+  dl_blue();
+}
+
+void loop3() {
   for(int ii=0; dispatch_info_table[info.curr_state].pre_checks[ii]; ii++)
     if (dispatch_info_table[info.curr_state].pre_checks[ii](&info))
       return; //transision
