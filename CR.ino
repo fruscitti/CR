@@ -3,6 +3,20 @@
  * Dispatch
  */
 
+extern const byte PB;
+extern const byte PG;
+extern const byte PR;
+extern const byte RI;
+extern const byte BI;
+extern const byte RD;
+extern const byte GD;
+extern const byte TD;
+extern const byte ED;
+extern const byte TI;
+extern const byte EI;
+extern const byte SPK;
+
+
 typedef enum B_STATES { ST_WAIT, ST_PLAY, ST_WIN, ST_LOSS } b_state;
 #define RED 0
 #define GREEN 1
@@ -267,7 +281,7 @@ extern const byte PG;
 extern const byte PR;
 
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(115200);
   Serial.println("Begin");
   game_setup();
   reset();
@@ -296,11 +310,26 @@ void loop2() {
   */  
 }
 
-void loop() {
+void loop3() {
+  p_red();
+  delay(1000);
+  return;
+  //byte k = read_color(RED);
+  //return;
+  long d = read_distance(TI, EI);
+  Serial.print("Izq: ");
+  Serial.println(d);
+  delay(500);
+  d = read_distance(TD, ED);
+  Serial.print("Der: ");
+  Serial.println(d);
+  delay(500);
+  return;
   dl_blue();
+  dr_green();
 }
 
-void loop3() {
+void loop() {
   for(int ii=0; dispatch_info_table[info.curr_state].pre_checks[ii]; ii++)
     if (dispatch_info_table[info.curr_state].pre_checks[ii](&info))
       return; //transision

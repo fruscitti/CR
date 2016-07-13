@@ -6,30 +6,30 @@
  * Der: Echo
  * Der: Trig
  */
-const byte PB = 41;
-const byte PG = 40;
-const byte PR = 42;
-const byte RI = 45;
-const byte BI = 44;
-const byte RD = 43;
-const byte GD = 38;
-const byte TD = 33;
-const byte ED = 32;
-const byte TI = 31;
-const byte EI = 30;
-const byte SPK = 47;
+const byte PB = 9;
+const byte PG = 8;
+const byte PR = 12;
+const byte RI = 5;
+const byte BI = 4;
+const byte RD = 7;
+const byte GD = 6;
+const byte TD = 41;
+const byte ED = 40;
+const byte TI = 22;
+const byte EI = 23;
+const byte SPK = 24;
 
 const int r_freq = 440;
 const int g_freq = 494;
 const int b_freq = 554;
 const int w_freq = 100;
 
-const int usLL = 2;
-const int usUL = 4;
+const int usLL = 1;
+const int usUL = 3;
 
 int sound_freqs[] = {r_freq, g_freq, b_freq, w_freq}; 
 
-int read_distance(byte trigPin, byte echoPin) {
+long read_distance(byte trigPin, byte echoPin) {
   digitalWrite(trigPin, LOW);
   delayMicroseconds(2);
   // Sets the trigPin on HIGH state for 10 micro seconds
@@ -37,6 +37,7 @@ int read_distance(byte trigPin, byte echoPin) {
   delayMicroseconds(10);
   digitalWrite(trigPin, LOW);  // Reads the echoPin, returns the sound wave travel time in microseconds
   long duration = pulseIn(echoPin, HIGH);
+  if (duration < 0) duration = 0;
   return (int)(duration>>9);
   // Calculating the distance
   //return duration*0.034/2;
@@ -144,7 +145,7 @@ bool isGreen(int li, int ld) {
   return (ld >= usLL && ld <= usUL && (li < usLL || li > usUL));
 }
 
-const int read_interval = 40; // 40 ms
+const int read_interval = 30; // 40 ms
 const int read_times = 1000 / read_interval; // Durante 1 segundo
 const int read_ok = read_times / 2; // Mitad Ok
 
@@ -156,8 +157,16 @@ byte read_color(byte color) {
   int t = 0;
 
   while (t < read_times) {
-    int li = read_distance(TI, EI);
     int ld = read_distance(TD, ED);
+    int li = read_distance(TI, EI);
+
+    /*
+    Serial.print("Li: ");
+    Serial.print(li);
+    Serial.print(", Ld: ");
+    Serial.println(ld);
+    */
+    
     byte lrc = WRONG;
     if (isRed(li, ld)) lrc = RED;
     else if (isBlue(li, ld)) lrc = BLUE;
@@ -171,8 +180,10 @@ byte read_color(byte color) {
       for(int ii=t-read_ok+1; ii<=t; ii++) {
         if (read_samples[ii] == color) ok_count++; 
       }
-      if (ok_count >= read_ok-1)
+      if (ok_count >= read_ok-1) {
+        Serial.println("Llego!!!!!!!!!!!!!!!!!");
         return color;
+      }
     }
     
     t++;
@@ -180,6 +191,7 @@ byte read_color(byte color) {
   }
 
   // No llego al color real, cuento cual gana y retorno ese
+  Serial.println("No llego");
   int cc[4];
   for(int ii=0; ii<4; ii++)
     cc[ii] = 0;
@@ -193,62 +205,6 @@ byte read_color(byte color) {
   return WRONG;
 }
 
-byte check_combination(byte color, int imin, int imax, int dmin, int dmax, int n_times, int m_times) {
-  int t = 0;
-  int tok = 0;
-  int nr = 0, nb = 0, ng = 0, noff = 0;
-
-  while (t++ < m_times) {
-    long li = read_distance(TI, EI);
-    long ld = read_distance(TD, ED);
-
-    if (li >= imin && li <= imax && ld >= dmin && ld <= dmax) {
-      tok++;
-      if (tok >= n_times)
-        return color;
-    } else {
-      tok = 0;
-    }
-    /* Actualizo color aca?? */
-    if (li >= imin && li <= imax && ld >= dmin && ld <= dmax) {
-      dl_red();
-      dr_red();
-      nr ++;
-    } else if (li >= imin && li <= imax) {
-      dl_blue();
-      dr_off();
-      nb++;
-    } else if (ld >= dmin && ld <= dmax) {
-      dl_off();
-      dr_green();
-      ng++;
-    } else {
-      dl_off();
-      dr_off();
-      noff++;
-    }
-
-    delay(50);
-  }
-  byte c = WRONG;
-  int m = noff;
-
-  if (nr > m) {
-    c = RED;
-    m = nr;
-  }
-
-  if (ng > m) {
-    c = GREEN;
-    m = ng;
-  }
-
-  if (nb > m) {
-    c = BLUE;
-    m = nb;
-  }
-  return c;
-}
 
 void caleido(int tic) {
   switch(tic % 2) {
