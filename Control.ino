@@ -177,7 +177,7 @@ byte read_color(byte color) {
     
     if (t >= read_ok-1) {
       int ok_count = 0;
-      for(int ii=t-read_ok+1; ii<=t; ii++) {
+      for(int ii=0; ii<=t; ii++) {
         if (read_samples[ii] == color) ok_count++; 
       }
       if (ok_count >= read_ok-1) {
